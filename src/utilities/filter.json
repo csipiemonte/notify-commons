@@ -1,0 +1,21 @@
+{
+  "eq":"$1 = '$2'",
+  "ne":"$1 != '$2'",
+  "lt":"$1 < '$2'",
+  "lte":"$1 <= '$2'",
+  "gt":"$1 > '$2'",
+  "gte":"$1 >= '$2'",
+  "in":"$1 IN($2)",
+  "nin":"$1 NOT IN($2)",
+  "c":"IFNULL($1,'') LIKE BINARY '%$2%'",
+  "ci":"IFNULL(lower($1),'') LIKE lower('%$2%')",
+  "nc":"IFNULL($1,'') NOT LIKE BINARY '%$2%'",
+  "nci":"IFNULL(lower($1),'') NOT LIKE lower('%$2%')",
+  "s":"$1 LIKE BINARY '$2%'",
+  "si":"lower($1) LIKE lower('$2%')",
+  "e":"$1 LIKE BINARY '%$2'",
+  "ei":"lower($1) LIKE lower('%$2' )",
+  "null": "(($1 is null and $2) or ($1 is not null and not $2))",
+  "match": "match($1) against('$2' IN BOOLEAN MODE)",
+  "not_match": "not match($1) against('$2' IN BOOLEAN MODE)"
+}
