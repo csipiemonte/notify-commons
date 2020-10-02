@@ -21,7 +21,7 @@ module.exports = function (conf, logger, app) {
             blacklist = await req_promise(options);
             logger.debug("blacklist: ",blacklist);
         }catch(e){
-            logger.error("error in updating blacklist: ",e);
+            logger.error("error in updating blacklist: ", e.message);
         }
     }
 

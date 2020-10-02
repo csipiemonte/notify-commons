@@ -13,7 +13,7 @@ module.exports = function (conf, logger, permissionMap, app) {
             try {
                 return utility.checkNested(conf,"security.crypto.password") ? crypto.decrypt(req.headers['x-authentication'], conf.security.crypto.password):req.headers['x-authentication'];
             } catch (e) {
-                logger.info("error decrypting JWT token:", e);
+                logger.info("error decrypting JWT token: ", e.message);
                 e.name = "Decrypting Error";
                 e.status = 401;
                 e.type = "security_error";

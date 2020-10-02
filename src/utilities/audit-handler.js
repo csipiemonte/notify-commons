@@ -70,7 +70,7 @@ function createAudit(req, res) {
         try {
             token = utility.checkNested(module.conf,"security.crypto.password") ? crypto.decrypt(req.headers['x-authentication'], module.conf.security.crypto.password):req.headers['x-authentication'];
         } catch (e) {
-            module.logger.info("error decrypting JWT token:", e);
+            module.logger.info("error decrypting JWT token: ", e.message);
         }
 
         token = jwt.decode(token);

@@ -10,7 +10,7 @@ module.exports = function (conf, logger) {
         conn = result;
         console.log("connection ", result);
     }).catch( err => {
-       logger.error("Error in database connection: ",err);
+       logger.error("Error in database connection: ", err.message);
     });
 
     mysql.event.on('hit', (query, hash, result) => {

@@ -327,7 +327,7 @@ module.exports = function (conf, logger, eh, message_section, checkFunction, che
             } catch (err) {
                 logger.error("data not inserted: ", JSON.stringify(data));
                 if (eh) eh.system_error("error while putting the message in the message broker", JSON.stringify(err));
-                logger.error("error while putting the message in the message broker", err);
+                logger.error("error while putting the message in the message broker", err.message);
                 await sleep(10000);
             }
         } while (!ok);
