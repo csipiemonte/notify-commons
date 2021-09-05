@@ -22,7 +22,7 @@
     "express-jwt": "^5.3.1",
     "ioredis": "^4.3.0",
     "jsonwebtoken": "^8.2.1",
-    "log4js": "^2.5.3",
+    "log4js": "^3.0.0",
     "mysql": "^2.15.0",
     "mysql-cache": "^2.1.2",
     "os": "^0.1.1",
