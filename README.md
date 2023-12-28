@@ -1,9 +1,9 @@
 ## Descrizione
 
-Il progetto _commons_ contiene tutte quelle funzionalità comuni ai vari moduli che compongono la suite Notify (Piattaforma di notifica regionale).
+Componente Commons per il progetto Notify (Piattaforma di notifica regionale). Contiene tutte quelle funzionalità comuni ai vari moduli che compongono la piattaforma.
 
 ## Installazione
 
-* Compilare i sorgenti utilizzando [apache ant](https://ant.apache.org/), viene generato un file .tar (es: _commonssrv-2.0.1.tar_)
-* Estrarre il file .tar nella directory `/appserv/unp/notify/commons`
-* Eseguire il comando `npm install`
+* Clonare il repository in una cartella. Nella stessa cartella dovranno essere messe le altre componenti che utilizzano i moduli contenuti nel presente repo.
+* Posizionarsi nella cartella del repository: `cd notify-commons`
+* Eseguire il comando `npm install` per installare le dipendenze
