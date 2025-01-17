@@ -103,48 +103,20 @@ function filter(f) {
     return this;
 }
 
-/*function clause(field, expression) {
-    var result = "";
-    for (var operator in expression) {
-        console.log("operator:", operator);
-        console.log("expression:", expression);
-        var value = expression[operator];
+/**
+ * add a sql string as query clause
+ * @param {*} f 
+ * @returns 
+ */
+function sqlFilter(f) {
+    if (!f) return this;
+    if (!typeof(f) === 'string') throw ({message: "fields must be a string", status: 400});
 
-        if (value instanceof Array) {
-            value = [value.map(e => {
-                e.replace(/'/g, "''");
-                return "'" + e + "'";
-            }).join()];
-        } else if(value instanceof String) {
-            value = [value.replace(/'/g, "''")];
-        }else if (value instanceof Object) {
-            if (!value.values) throw ({
-                message: "if the value is an object, it should be contains a key named values",
-                status: 400
-            });
-            value = (value.values.map((e) => {
-                return e.replace(/'/g, "''");
-                //return "'" + e + "'";
-            }));
-        } else {
-            value=[value];
-        }
+    if(!this.sql.includes("where 1=1")) this.sql += " where 1=1";
+    this.sql += " AND (" + f + ")";
+    return this;
+}
 
-        value = value.map(keyValue => {
-            if (keyValue.match(/^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z$/)) {
-                if (!field.toLowerCase().startsWith("unix_timestamp")) field = "unix_timestamp(" + field + ")";
-                return new Date(keyValue).getTime() / 1000;
-            }
-            return keyValue;
-        });
-
-        //console.log("field: " + field);
-        //console.log("value: " + value);
-        value.forEach(theValue => result += " and " + filtri[operator].replace(/\$1/g, field).replace(/\$2/g, theValue));
-
-    }
-    return result;
-}*/
 function clause(field, expression) {
     var result = "";
     for (var operator in expression) {
@@ -154,15 +126,6 @@ function clause(field, expression) {
             e.replace(/'/g, "''");
             return "'" + e + "'"
         }).join();
-
-        /*if (value.match(/^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z$/)) {
-            value = new Date(value).getTime() / 1000;
-            //if (!field.toLowerCase().startsWith("unix_timestamp")) field = "unix_timestamp(" + field + ")";
-            //value = "FROM_UNIXTIME(" + value + ")";
-        }*/
-
-        //console.log("field: " + field);
-        //console.log("value: " + value);
 
         result += " and " +  (typeof filtri[operator] === 'string' ? filtri[operator].replace(/\$1/g, field).replace(/\$2/g, value) : filtri[operator](field,value));
     }
@@ -175,7 +138,6 @@ function fields(f) {
     if (!typeof(f) === 'string') throw ({message: "fields must be a string", status: 400});
     var splitted = f.split(",");
 
-//    if (splitted.length != splitted.filter(e => e.trim().toUpperCase().match(/^[A-Z_][A-Z0-9_]+$|^\*$/g)).length)
     if (splitted.length !== splitted.filter(e => e.toUpperCase().match(/(^[A-Z_\*][A-Z0-9_\.\*\s]+$|^COUNT \(\*\) AS COUNT$)/g)).length)
         throw {message: "fields not valid", status: 400};
 
@@ -213,10 +175,6 @@ function sort(s) {
     return this;
 }
 
-// function count() {
-//     this.sql = "select count(1) as count from (" + this.sql + ") t";
-//     return this;
-// }
 function count() {
     this.fields("count (*) as count");
     return this;
@@ -225,7 +183,6 @@ function count() {
 function table(t) {
     if (!t) throw ({message: "table is null", status: 400});
     if (!typeof(t) === 'string') throw ({message: "table must be a string", status: 400});
-    //if (!t.toUpperCase().match(/^[A-Z_]+[A-Z0-9_]*$/)) throw ({message: "table <" + t + "> not valid", status: 400});
     this.sql += t;
     return this;
 }
@@ -282,13 +239,10 @@ function values(insFields, insValues) {
         }
     }
 
-
     insValues = insValues.map(e => {
         if (e !== undefined && e !== null) {
-            return Array.isArray(e)? "ARRAY"+JSON.stringify(e).replace(/"/g,"'") : "'" + postgres_escape(e) + "'";
-            //return "'" + (typeof e === "string" ? e.replace(/'/g, "''") : e) + "'";
+            return Array.isArray(e)? "ARRAY" + JSON.stringify(e).replace(/"/g,"'") : "'" + postgres_escape(e) + "'";
         } else {
-          console.log(e);
             return 'NULL';
         }
     });
@@ -348,11 +302,16 @@ function set(columns, values) {
         }
     }
 
-
     if (!columns) throw ({status: 400, message: "columns not setted"});
     if (columns.length !== values.length) throw ({status: 400, message: "columns and values must have same size"});
 
-    values = values.map(e => typeof e === "string"? "'" + postgres_escape(e) + "'" : e).map(e => Array.isArray(e)? "ARRAY"+JSON.stringify(e).replace(/"/g,"'") : e);
+    values = values.map(e => typeof e === "string"? "'" + postgres_escape(e) + "'" : e).map(e => {
+        if (e !== undefined && e !== null) {
+            return Array.isArray(e)? "ARRAY"+JSON.stringify(e).replace(/"/g,"'") : e;
+        } else {
+            return 'NULL';
+        }
+    });
     this.sql += " set";
     columns.forEach((col, i) => this.sql += " " + col + "=" + values[i] + ",");
 
@@ -363,35 +322,10 @@ function set(columns, values) {
 
 }
 
-
 function postgres_escape(s) {
     let str = typeof s === "object"? JSON.stringify(s) : s + "";
     return str.replace(/'/g, "''");
-/*    return str.replace(/[\0\x08\x09\x1a\n\r"'\\\%]/g, function (char) {
-        switch (char) {
-            case "\0":
-                return "\\0";
-            case "\x08":
-                return "\\b";
-            case "\x09":
-                return "\\t";
-            case "\x1a":
-                return "\\z";
-            case "\n":
-                return "\\n";
-            case "\r":
-                return "\\r";
-            case "\"":
-            case "'":
-            case "\\":
-            case "%":
-                return "\\"+char; // prepends a backslash to backslash, percent,
-                                  // and double/single quotes
-        }
-    });
-*/
 }
-
 
 var q = {
     insert: insert,
@@ -403,6 +337,7 @@ var q = {
     table: table,
     fields: fields,
     filter: filter,
+    sqlFilter: sqlFilter,
     page: page,
     sort: sort,
     count: count,
@@ -413,6 +348,5 @@ var q = {
     update: update,
     set: set
 };
-
 
 module.exports = q;

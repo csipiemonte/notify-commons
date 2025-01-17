@@ -2,11 +2,9 @@
  * Main class that return all the utilities in commons
  */
 
-
 function isObject(item) {
     return (item && typeof item === 'object' && !Array.isArray(item));
 }
-
 
 /* merge json object recursively, the second json properties will overwrite the first*/
 function merge_in(target, ...sources) {
@@ -20,7 +18,13 @@ function merge_in(target, ...sources) {
                 if (!target[key]) Object.assign(target, {[key]: {}});
                 merge_in(target[key], source[key]);
             } else {
-                Object.assign(target, {[key]: source[key]});
+                let value = null;
+                try {
+                    value = JSON.parse(source[key]);
+                } catch(e) {
+                    value = source[key];
+                }
+                if(value) Object.assign(target, {[key]: value});
             }
         }
     }
@@ -44,7 +48,7 @@ function toObj (k, v, result) {
         return result;
     }
     result[k.substring(0, _)] = toObj(k.substring(_ + 1), v, result[k.substring(0, _)]);
-    return result ;
+    return result;
 }
 
 function hasOwnNestedProperty(obj, propertyPath){
@@ -72,33 +76,31 @@ module.exports = {
     locales: require("./utilities/locales"), // list of available locales
     obj : function (conf) {
         /* the default configuration of the logger is in "commons.json" and in case the passed conf contains log4js properties, they'll overwrite the first one */
-        var logger = require("./conf/logger")(merge(require("./conf/commons"),conf));
+        var logger = require("./conf/logger")(merge(require("./conf/commons"), conf));
         /* event-handler */
-        if(hasOwnNestedProperty(conf, "mb.queues.events")) var eh = require("./utilities/event-handler")(conf,logger);
-        if(hasOwnNestedProperty(conf, "mb.queues.audit")) var ah = require("./utilities/audit-handler")(conf,logger);
+        if(hasOwnNestedProperty(conf, "mb.queues.events")) var eh = require("./utilities/event-handler")(merge(require("./conf/commons"), conf), logger);
+        /* audit-handler */
+        if(hasOwnNestedProperty(conf, "mb.queues.audit")) var ah = require("./utilities/audit-handler")(merge(require("./conf/commons"), conf), logger);
         return {
             db: () => require("./conf/db")(conf, logger),
-            db_cache: () => require("./conf/db-cache")(conf, logger),
             multiple_db: () => require("./conf/multiple-db")(conf, logger),
             logger: (category) => {
-              logger = require("./conf/logger")(merge(require("./conf/commons"),conf),category);
+              logger = require("./conf/logger")(merge(require("./conf/commons"), conf), category);
               return logger;
             },
-            security_checks: () =>  require("./security/security-checks")(conf,logger,eh),
-            security: (permissionMap, app) => require("./security/security")(conf,logger,permissionMap,app),
-            blacklist: (app) => require("./security/blacklist")(conf,logger,app),
+            security_checks: () =>  require("./security/security-checks")(conf, logger, eh),
+            security: (permissionMap, app) => require("./security/security")(conf, logger, permissionMap, app),
+            blacklist: (app) => require("./security/blacklist")(conf, logger, app),
             cryptoAES_cbc: () => require("./security/cryptoAES_cbc"),
             event_handler: () => eh,
             audit_handler: () => ah,
             query_builder: () => require("./utilities/query-builder"),
             utility: () => require("./utilities/utility")(logger),
-            consumer: (message_section,checkFunction,checkTo,sendFunction,skipPreferences) => require("./utilities/consumer")(conf,logger,eh,message_section,checkFunction,checkTo,sendFunction,skipPreferences),
-            response_handler : (app) => require("./utilities/response-handler")(eh,ah,logger,app),
-            basic_auth : (app) => require("./security/basic-auth")(conf,logger,app),
-            elastic_search_db: () => require("./conf/elasticsearch-db")(conf, logger),
+            consumer: (message_section, checkFunction, checkTo, sendFunction, skipPreferences) => require("./utilities/consumer")(conf, logger, eh, message_section, checkFunction, checkTo, sendFunction, skipPreferences),
+            response_handler : (app) => require("./utilities/response-handler")(eh, ah, logger, app),
+            basic_auth : (app) => require("./security/basic-auth")(conf, logger, app),
             cache: (conf) =>  require("./cache/cache")(conf),
-            healthcheck: (app) => require("./utilities/healthcheck")(conf,logger,app),
-            promised_multiple_db: () => require("./conf/multiple-db-prom")(conf, logger)
+            healthcheck: (app) => require("./utilities/healthcheck")(conf, logger, app)
         }
     }
 }

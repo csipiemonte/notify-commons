@@ -1,4 +1,4 @@
- function remove_empty(obj)  {
+function remove_empty(obj) {
     const o = JSON.parse(JSON.stringify(obj)); // Clone source oect.
 
     Object.keys(o).forEach(key => {
@@ -13,9 +13,23 @@
     return o; // Return new object.
 };
 
-const uuid = require('uuid/v4');
-module.exports = function(eh,ah,logger, app){
-    var not_audit = ["emailconsumer","pushconsumer","smsconsumer"];
+const { v4: uuid } = require('uuid');
+module.exports = function(eh, ah, logger, app) {
+    var not_audit = [
+        "emailconsumer",
+        "email_consumer",
+        "pushconsumer",
+        "push_consumer",
+        "smsconsumer",
+        "sms_consumer",
+        "mexconsumer",
+        "mex_consumer",
+        "ioconsumer",
+        "io_consumer",
+        "mex",
+        "preferences"
+    ];
+
     app.use((err, req, res, next) => {
         if (err.code) err.type = "security_error";
         if(!err.type) err.type = "system_error";
@@ -27,22 +41,17 @@ module.exports = function(eh,ah,logger, app){
     app.use((err, req, res, next) => {
         res.status(err.status);
         res.unp_body = err.message ? remove_empty(err.message) : err.message;
-        if (err.status >= 500 ) logger.info(err);
-        if(eh) {
-            let err_type = eh[err.type] ? err.type : "system_error";
-            eh[err_type] (req, JSON.stringify(err.message));
-        }
+        if (err.status >= 500 ) logger.info("Returning http status > 500:", JSON.stringify(err));
 
         let uuid_local = req.header("X-Request-ID") || uuid();
         req.header["X-Request-ID"] = uuid_local;
         res.set("X-Request-ID", uuid_local );
         res.set("X-Response-Time", Number(new Date().getTime()) - Number(res.get('X-Response-Time')) + "ms");
 
-        if(ah && (!req.user || !not_audit.includes(req.user.preference_service_name))){
+        if(ah && (!req.auth || !not_audit.includes(req.auth.preference_service_name))) {
             ah.trace_request(req);
             ah.trace_response(req, res);
         }
         res.send(res.unp_body);
     });
-
 }

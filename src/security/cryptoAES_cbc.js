@@ -1,25 +1,21 @@
-
 var crypto = require('crypto');
 
 var AESCrypt = {};
 
-AESCrypt.encrypt = function(cleardata,password) {
+AESCrypt.encrypt = function(cleardata, password) {
     var cryptedKey = crypto.createHash('md5').update(password).digest("hex");
     var iv = cryptedKey.slice(0,16);
     var encipher = crypto.createCipheriv('aes-256-cbc', cryptedKey, iv),
         encryptdata = encipher.update(cleardata, 'utf8', 'binary');
     encryptdata += encipher.final('binary');
-    var encode_encryptdata = new Buffer(encryptdata, 'binary').toString('base64');
+    var encode_encryptdata = Buffer.from(encryptdata, 'binary').toString('base64');
     return encode_encryptdata;
 }
 
-
-AESCrypt.decrypt = function(encryptdata,password) {
+AESCrypt.decrypt = function(encryptdata, password) {
     var cryptedKey = crypto.createHash('md5').update(password).digest("hex")
     var iv = cryptedKey.slice(0,16);
-
-    encryptdata = new Buffer(encryptdata, 'base64').toString('binary');
-
+    encryptdata = Buffer.from(encryptdata, 'base64').toString('binary');
     var decipher = crypto.createDecipheriv('aes-256-cbc', cryptedKey, iv),
         decoded = decipher.update(encryptdata, 'binary', 'utf8');
     decoded += decipher.final('utf8');

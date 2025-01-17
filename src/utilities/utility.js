@@ -1,4 +1,4 @@
-const uuid = require('uuid/v4');
+const { v4: uuid } = require('uuid');
 
 /**
  * generale utility functions
@@ -138,11 +138,58 @@ module.exports = function (logger) {
        return detectCycle(object);
     }
 
+    /**
+     * Utility to parse a string that represent a duration or a number
+     * @param string the string reppresenting a duration or a number in the format <number><type> where type could be
+     *                  'd' (for days), 'm' (for months), 'y' (for years), 'K' (for kilo), 'M' (for mega) or 'G' (for giga)
+     * @returns {object} contain the type (days or number) and the normalized value (in days for duration)
+     */
+    module.parseNumberOrTime = function(string) {
+
+        if(!string) return null;
+
+        let parts = string.match(/(\d+)(d|m|y|K|M|G)/);
+        if(!parts) return null;
+
+        let map = new Map();
+        map.set("d", 1);
+        map.set("m", 30);
+        map.set("y", 365);
+        map.set("K", 1000);
+        map.set("M", 1000000);
+        map.set("G", 1000000000);
+
+        let number = Number(parts[1]);
+        let type = parts[2];
+
+        let result = {};
+        if(type === "d" || type === "m" || type === "y") {
+            result.type = "days";
+        } else {
+            result.type = "number";
+        }
+        result.value = number * map.get(type);
+
+        return result;
+    }
+
+    module.escapeXml = function(unsafe) {
+        return unsafe.replace(/[<>&'"]/g, function (c) {
+            switch (c) {
+                case '<': return '&lt;';
+                case '>': return '&gt;';
+                case '&': return '&amp;';
+                case '\'': return '&apos;';
+                case '"': return '&quot;';
+            }
+        });
+    }
+
     function isObject(item) {
         return (item && typeof item === 'object' && !Array.isArray(item));
     }
     /*module.checkHeader = function checkHeader(req, res, next) {
-        if(req.user.permissions.includes("user") && req.get("Shib-Iride-IdentitaDigitale") === req.params.user_id) return next();
+        if(req.auth.permissions.includes("user") && req.get("Shib-Iride-IdentitaDigitale") === req.params.user_id) return next();
         var err = {name: "SecurityError", message: "Security context not valid"};
         return next({type: "security_error", status: 401, message: err});
     }*/

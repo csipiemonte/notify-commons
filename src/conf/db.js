@@ -1,5 +1,5 @@
 /**
- * methods for DB connection and initialize the connection pool
+ * methods for DB connection and initialization
  */
 module.exports = function (conf, logger) {
     const util = require('util');  

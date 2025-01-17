@@ -1,31 +1,40 @@
 {
   "log4js": {
+    "pm2": true,
     "appenders": {
       "consoleAppender": {
         "type": "console",
-        "layout": {
-          "type": "pattern",
-          "pattern": "%d{yyyy-MM-dd hh:mm:ss} [%-5p] %m"
-        }
+        "layout": { "type": "pattern", "pattern": "%d %[[%5.10p]%] pid:%z %f{1}:%l - %m" }
       },
       "fileAppender": {
         "type": "file",
         "filename": "../../logs/app.log",
+        "layout": { "type": "pattern", "pattern": "%d %[[%5.10p]%] pid:%z %f{1}:%l - %m" },
         "maxLogSize": 5242880,
-        "compress": true,
-        "layout": {
-          "type": "pattern",
-          "pattern": "%d{yyyy-MM-dd hh:mm:ss} [%-5p] %m"
-        }
+        "compress": true
       }
     },
     "categories": {
       "default": {
         "appenders": [
-          "fileAppender"
+          "fileAppender",
+          "consoleAppender"
         ],
-        "level": "debug"
+        "level": "debug",
+        "enableCallStack": true
       }
+    }
+  },
+  "auditHandler":{
+    "retries": {
+      "num": 5,
+      "delay": 300
+    }
+  },
+  "eventHandler":{
+    "retries": {
+      "num": 5,
+      "delay": 300
     }
   }
 }

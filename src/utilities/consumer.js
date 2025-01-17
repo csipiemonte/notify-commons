@@ -17,7 +17,6 @@ module.exports = function (conf, logger, eh, message_section, checkFunction, che
     const circular_json = require('circular-json');
     const messages_channels = ['sms','push','email','mex','io'];
 
-
     /**
      * Options for contacting message Broker (mb)
      */
@@ -29,11 +28,13 @@ module.exports = function (conf, logger, eh, message_section, checkFunction, che
         }
     };
 
-
+    /**
+     * get messages from message broker for a channel
+     * @returns array of messages
+     */
     async function getBodies() {
         let from_mb = null;
         try {
-            //logger.debug("reading from mb");
             from_mb = await request(optionsToMb);
             if (from_mb.statusCode === 401) {
                 logger.error("not authorized to contact the message broker", from_mb.body);
@@ -44,16 +45,12 @@ module.exports = function (conf, logger, eh, message_section, checkFunction, che
                 return [];
             }
             if (from_mb.statusCode !== 200) {
-                //if (eh) eh.system_error(optionsToMb.url, "error from message broker: [" + from_mb.statusCode + "]  " + from_mb.body);
-                logger.error("error from message broker: [" + from_mb.statusCode + "] " + from_mb.body);
+                logger.error("got error from message broker: [" + from_mb.statusCode + "] " + from_mb.body);
                 await sleep(10000);
                 return [];
             }
         } catch (err) {
-            //let error = {};            
-            //error.error = err;
-            //if (eh) eh.system_error("Error", circular_json.stringify(error));
-            logger.error("ERROR: ", circular_json.stringify(err));
+            logger.error("exception in getting messages from message broker:", circular_json.stringify(err));
             await sleep(10000);
             return [];
         }
@@ -64,7 +61,7 @@ module.exports = function (conf, logger, eh, message_section, checkFunction, che
     }
 
     /**
-     * Main function
+     * consumer logic
      */
     var to_continue = true;
     async function execute() {
@@ -73,23 +70,28 @@ module.exports = function (conf, logger, eh, message_section, checkFunction, che
 
             for(let body of bodies)
             {
+                logger.trace("body:", body);
                 try {
+                    if (messages_channels.includes(message_section) && !body.payload[message_section]) continue;
 
                     if (body.payload.dry_run) {
                         logger.debug("the message has dry_run set");
-                        continue;
-                    }
-
-                    if (messages_channels.includes(message_section) && !body.payload[message_section]) continue;
-
-                    if (new Date(body.expire_at).getTime() < new Date().getTime() ) {
-                        logger.debug("the message " + body.payload.id + " is expired in date: " + new Date(body.expire_at).toLocaleString() + ", it will not be send");
-                        if(eh) eh.info("the message " + body.payload.id + " is expired, it will not be send",JSON.stringify({
-                            message:body.payload,
+                        if(eh) eh.info("the message " + body.payload.id + " has dry_run attribute set", JSON.stringify({
+                            message: body.payload,
                             user: body.user
                         }));
                         continue;
                     }
+
+                    if (new Date(body.expire_at).getTime() < new Date().getTime() ) {
+                        logger.debug("the message " + body.payload.id + " is expired in date: " + new Date(body.expire_at).toLocaleString() + ", it will not be sent");
+                        if(eh) eh.info("the message " + body.payload.id + " is expired, it will not be sent", JSON.stringify({
+                            message: body.payload,
+                            user: body.user
+                        }));
+                        continue;
+                    }
+
                     var check_result = checkFunction(body.payload);
                     var errors = check_result.filter(e => e !== "");
                     if(messages_channels.includes(message_section) && (!body.payload.id || !body.payload.id.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i))) errors.push("id must be a valid uuid");
@@ -97,7 +99,7 @@ module.exports = function (conf, logger, eh, message_section, checkFunction, che
                         errors.forEach(e => {
                             logger.info(e)
                         });
-                        if (eh) eh.client_error("the message is malformed : " + errors.join(","), JSON.stringify({
+                        if (eh) eh.client_error("the message is malformed:" + errors.join(","), JSON.stringify({
                             message: body.payload,
                             user: body.user,
                             error: "the message is malformed : " + errors.join(",")
@@ -119,24 +121,24 @@ module.exports = function (conf, logger, eh, message_section, checkFunction, che
                         e.user = body.user;
                         e.message = body.payload;
                     }                     
-                     e.error = err;
-                     e.description = err.description || "Error";                    
-                    if(eh) eh[analizeError(err,body)](e.description, circular_json.stringify(e));                                        
-                    logger[err.level ||"error"](JSON.stringify(e.error, null, 4));             
-                    if (isErrorToRetry(err,body)) await postMessageToMB(body);
-                    //await sleep(10000);
+                    e.error = err;
+                    e.description = err.description || "Error";
+                    if(eh) eh[analizeError(err, body)](e.description, circular_json.stringify(e));
+                    
+                    let logLevel = err.level || "error";
+                    if (isErrorToRetry(err, body)) {
+                        await postMessageToMB(body);
+                        if(logLevel === "error") logLevel = "warn";
+                    }
+                    logger[logLevel](err.message, err);
                 }
-
             }
-
         }
         logger.info("stopped gracefully");
         process.exit(0);
     }
 
-    function analizeError(err,body){
-
-        let stringedErr = typeof err === "object" ? JSON.stringify(err) : err;
+    function analizeError(err, body) {
 
         if(err.type_error) return err.type_error;
 
@@ -153,14 +155,17 @@ module.exports = function (conf, logger, eh, message_section, checkFunction, che
             return "client_error";
         }
 
+        if(typeof err === "object" && err.client_source === "pushconsumer" && err.type === "client_error" ){
+            return "client_error";
+        }
+
+        if(isErrorToRetry(err, body)) return "retry";
+        
         return "system_error";
     }
 
-
-    function isErrorToRetry(err,body) {
+    function isErrorToRetry(err, body) {
         if(body.to_be_retried === false) return false;
-        //let stringedErr = typeof err === "object" ? JSON.stringify(err) : err;
-        //if (JSON.stringify(stringedErr).includes("ER_DUP_ENTRY")) return false;
 
         // db error: duplicate key value violates unique constraint
         if(typeof err === "object" && err.code === "23505"){
@@ -176,6 +181,10 @@ module.exports = function (conf, logger, eh, message_section, checkFunction, che
         }
 
         if(typeof err === "object" && err.client_source === "ioconsumer" && err.type === "client_error" ){
+            return false;
+        }
+
+        if(typeof err === "object" && err.client_source === "pushconsumer" && err.type === "client_error" ){
             return false;
         }
 
@@ -214,11 +223,13 @@ module.exports = function (conf, logger, eh, message_section, checkFunction, che
             return preferences;
         }
 
+        let tenant = body.user.tenant ? body.user.tenant : conf.defaulttenant;
         var optionsUserPreferences = {
-            url: conf.preferences.url + "/" + body.payload.user_id + "/contacts/" + body.user.preference_service_name,
+            url: conf.preferences.url + "/tenants/" + tenant + "/users/" + body.payload.user_id + "/contacts/" + body.user.preference_service_name,
             headers: {
                 'x-authentication': conf.preferences.token,
-                'msg_uuid': body.payload.id
+                'msg_uuid': body.payload.id,
+                'Authorization': 'Basic ' + Buffer.from(conf.preferences.basicauth.username.trim() + ":" + conf.preferences.basicauth.password.trim()).toString('base64')
             },
             json: true
         };
@@ -260,6 +271,7 @@ module.exports = function (conf, logger, eh, message_section, checkFunction, che
             logger.info("the user " + body.payload.user_id + " has not preferences for the service: " + body.user.preference_service_name);
             return null;
         }
+
         /**
          * if user exists but he doesn't have setted the contact for this channel, the message will not be sent
          */
@@ -276,7 +288,7 @@ module.exports = function (conf, logger, eh, message_section, checkFunction, che
          * The message can be sent
          */
         if (preferences.statusCode !== 200 && preferences.statusCode !== 404) {
-            if (eh) eh.system_error("error from preferences: [" + preferences.statusCode + "] ", JSON.stringify({
+            if (eh) eh.retry("error from preferences: [" + preferences.statusCode + "] ", JSON.stringify({
                 error: preferences.body,
                 message: body.payload,
                 user: body.user
@@ -301,11 +313,10 @@ module.exports = function (conf, logger, eh, message_section, checkFunction, che
      * @param data total message
      */
     async function postMessageToMB(data) {
+        logger.debug("send message to retry queue:", conf.mb.queues.retry);
 
-        logger.debug("send message to: to_be_retried");
-        //let queue_name = data.priority === "high" ? conf.mb.queues.messages + "_priority:to_be_retried" : conf.mb.queues.messages + ":to_be_retried";
         var optionsToMbPost = {
-            url: conf.mb.queues.messages + ":to_be_retried",
+            url: conf.mb.queues.retry,
             headers: {
                 'x-authentication': conf.mb.token
             },
@@ -320,34 +331,27 @@ module.exports = function (conf, logger, eh, message_section, checkFunction, che
                 if (response.statusCode === 201) ok = true;
                 else {
                     logger.error("data not inserted: ", JSON.stringify(data));
-                    if (eh) eh.system_error("error while putting the message in the message broker [" + response.statusCode + "] ", response.body);
+                    //if (eh) eh.system_error("error while putting the message in the message broker [" + response.statusCode + "] ", response.body);
                     logger.error("error while putting the message in the message broker [" + response.statusCode + "] ", response.body);
                     await sleep(10000);
                 }
+                logger.debug("post to MB:", ok);
             } catch (err) {
                 logger.error("data not inserted: ", JSON.stringify(data));
-                if (eh) eh.system_error("error while putting the message in the message broker", JSON.stringify(err));
+                //if (eh) eh.system_error("error while putting the message in the message broker", JSON.stringify(err));
                 logger.error("error while putting the message in the message broker", err.message);
                 await sleep(10000);
             }
         } while (!ok);
     }
 
-
-    var kill_handler;
-    function shutdown(signal){
-        console.log("gracefully stopping: " + signal + " received");
+    function shutdown(signal) {
         logger.info("gracefully stopping: " + signal + " received");
-
-        kill_handler = setTimeout(() => {
-            logger.debug("kill handler");
-            process.exit(1);
-        },10 * 1000);
         to_continue = false;
     }
 
-    process.on("SIGINT",shutdown);
-    process.on("SIGTERM",shutdown);
+    process.on("SIGINT", shutdown);
+    process.on("SIGTERM", shutdown);
 
     return execute;
 }
